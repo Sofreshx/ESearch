@@ -13,13 +13,34 @@ export interface CompanyFilter {
     tranche_ca_millesime_3: CaMillesime
 
   }
-export enum Operations
-{
-    Limit,
-    Where,
-    Exclude,
-    Select,
-    OrderBy
+export enum QueryOperator {
+    Equal = "like",
+    Less = "<",
+    More = ">",
+    Not = "not",
+    Search = "search",
+    Suggest = "suggest",
+    StartsqWith = "startswith",
+    InBbox = "in_bbox",
+    WithinDistance = "within_distance",
+    Intersects = "intersects",
+    Disjoint = "disjoint",
+    Within = "within"
+
+}
+export enum QueryOperatorLink{
+  And = "and",
+  Or = "or",
+  Not = "not"
+}
+export enum QueryFilterType {
+    Limit = "limit",
+    Where = "where",
+    Exclude = "exclude",
+    Select = "select",
+    OrderBy = "order_by",
+    GroupBy = "group_by",
+    IfNull = "ifnull"
 }
   //TODO : move the string value of the parameters to a config file
 
