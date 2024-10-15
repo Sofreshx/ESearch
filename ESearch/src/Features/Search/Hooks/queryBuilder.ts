@@ -1,48 +1,52 @@
-import { Filter } from "lucide-react";
-import { Company } from "../Models/company";
-import { QueryFilterType, QueryOperator, QueryOperatorLink } from "../Models/companyFilter";
+import { Company } from "../models/company";
+import { QueryFilterType, QueryOperator, QueryOperatorLink } from "../models/companyFilter";
 import { useState } from "react";
 
-export interface Filter { //TODO : rework so it hold all of the data for a singe type ( where select etc) and need a custom type to hold both value field operator and operatorlink, filter holding an array of those
+export interface Filter { 
   filterType: QueryFilterType;
-  operatorLink: QueryOperatorLink;
+  filterElements: FilterElement[];
+}
+
+export interface FilterElement{ //TODO : filter will actually only be for the where clause ( exclude maybe )
+  field: keyof Company;
   operator: QueryOperator;
-  field?: keyof Company;
-  value?: any;
+  value: any;
+  operatorLink: QueryOperatorLink;
 }
 
 export const useQueryBuilder = (baseUrl: string) => {
+  const [limit, setLimit] = useState<number>(0);
+  const [orderBy, setOrderBy] = useState<string>("");
+  const [select, setSelect] = useState<string[]>([]);
+  const [exclude, setExclude] = useState<Filter[]>([]);
   const [filters, setFilters] = useState<Filter[]>([]);
+  const [query, setQuery] = useState<string>("");
+  
 
-  const addFilter = (filter: Filter) => {
+  const addFilter = (filter: Filter) => { //TODO we need to avoid duplicate filters
     setFilters((prevFilters) => [...prevFilters, filter]);
   };
 
-  const removeFilter = (operation: QueryFilterType, field?: keyof Company) => {
+  const removeFilter = (operation: QueryFilterType, field?: keyof Company) => { //TODO this is not correct
     setFilters((prevFilters) =>
-      prevFilters.filter((f) => f.filterType !== operation || f.field !== field)
+      prevFilters.filter((filter) => filter.filterType !== operation || filter.filterElements[0].field !== field)
     );
   };
 
   const buildQuery = (): string => {
     let queryParts: string[] = [];
-    let whereFilters = filters.filter(f => f.filterType == QueryFilterType.Where)
-
-    if(whereFilters.length > 0){
-      queryParts.push(buildWhereClause(whereFilters));
-    }
     
+    //TODO : add other query values like select, limit etc directly as they are much simpler
     for (const filter of filters) {
       switch (filter.filterType) {
+        case QueryFilterType.Where:
+          queryParts.push(buildClause(filter));
+          break;
         case QueryFilterType.OrderBy:
-          if (filter.field) {
-            queryParts.push(`OrderBy=${filter.field}`);
-          }
+          queryParts.push(buildClause(filter));
           break;
         case QueryFilterType.Limit:
-          if (filter.value) {
-            queryParts.push(`Limit=${filter.value}`);
-          }
+          queryParts.push(buildClause(filter));
           break;
         // Handle other operations like Select, Exclude, etc.
       }
@@ -51,10 +55,18 @@ export const useQueryBuilder = (baseUrl: string) => {
     return `${baseUrl}?${queryParts.join("&")}`;
   };
 
-  const buildWhereClause = (filters : Filter[]): string => {
-    //start whereclause with where in the string :
-    let clause = 
-    //return `Where=${field} ${operator} "${value}"`;
+  const buildClause = (filter : Filter): string => {
+    if(filter.filterElements.length === 0) return "";
+
+    let whereClause = `${filter.filterType}=
+    ${filter.filterElements[0].field} ${filter.filterElements[0].operator} ${filter.filterElements[0].value} `;
+
+    if(filter.filterElements.length === 1) return whereClause;
+
+    for (let i = 1; i < filter.filterElements.length; i++) {
+      whereClause += ` ${filter.filterElements[i].operatorLink} ${filter.filterElements[i].field} ${filter.filterElements[i].operator} "${filter.filterElements[i].value}"`;
+    }
+    return whereClause;
   };
 
   return { addFilter, removeFilter, buildQuery };
