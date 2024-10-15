@@ -41,3 +41,5 @@ export interface Company {
     tranche_ca_millesime_2: string
     tranche_ca_millesime_3: string
   }
+
+  export const defaultCompanyKeyArray = Object.keys(<Company>{}) as Array<keyof Company>

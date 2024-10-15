@@ -1,73 +1,87 @@
-import { Company } from "../models/company";
-import { QueryFilterType, QueryOperator, QueryOperatorLink } from "../models/companyFilter";
-import { useState } from "react";
-
-export interface Filter { 
-  filterType: QueryFilterType;
-  filterElements: FilterElement[];
-}
-
-export interface FilterElement{ //TODO : filter will actually only be for the where clause ( exclude maybe )
-  field: keyof Company;
-  operator: QueryOperator;
-  value: any;
-  operatorLink: QueryOperatorLink;
-}
+import config from "@/configurations/config";
+import { Company, defaultCompanyKeyArray } from "../models/api/company";
+import { useState, useEffect } from "react";
+import { Filter } from "../models/ui";
+import { QueryFilterType } from "../models/api/query";
 
 export const useQueryBuilder = (baseUrl: string) => {
-  const [limit, setLimit] = useState<number>(0);
-  const [orderBy, setOrderBy] = useState<string>("");
-  const [select, setSelect] = useState<string[]>([]);
-  const [exclude, setExclude] = useState<Filter[]>([]);
-  const [filters, setFilters] = useState<Filter[]>([]);
-  const [query, setQuery] = useState<string>("");
   
-
-  const addFilter = (filter: Filter) => { //TODO we need to avoid duplicate filters
-    setFilters((prevFilters) => [...prevFilters, filter]);
+  const baseQuery = config.apiUrl + config.endpoints.companies;
+  const [limit, setLimit] = useState<number>(50);
+  const [select, setSelect] = useState<Array<keyof Company>>(defaultCompanyKeyArray);
+  const [exclude, setExclude] = useState<Filter[]>([]);
+  const [where, setWhere] = useState<Filter[]>([]);
+  const [query, setQuery] = useState<string>(baseQuery);
+  
+  const addSelect = (select: keyof Company) => {
+    setSelect((prevSelect) => [...prevSelect, select]);
+  };
+  const removeSelect = (select: keyof Company) => { 
+    setSelect(prevSelect => prevSelect.filter(s => s !== select));
+  }; 
+  const addWhere = (where: Filter) => { 
+    setWhere((prevWhere) => [...prevWhere, where]);
   };
 
-  const removeFilter = (operation: QueryFilterType, field?: keyof Company) => { //TODO this is not correct
-    setFilters((prevFilters) =>
-      prevFilters.filter((filter) => filter.filterType !== operation || filter.filterElements[0].field !== field)
-    );
+  const removeWhere = (whereId: number) => { 
+    setWhere(prevWhere => prevWhere.filter(where => where.id !== whereId));
   };
 
-  const buildQuery = (): string => {
+  const addExclude = (excludeId: number) => { 
+    setExclude(prevExclude => prevExclude.filter(exclude => exclude.id !== excludeId));
+  };
+
+  const removeExclude = (excludeId : number) => {
+    setExclude(prevExclude => prevExclude.filter(exclude => exclude.id !== excludeId));
+  };
+  useEffect(() => {
+    buildQuery()
+  }, [limit, where, select, exclude]); 
+
+  const buildQuery = () => {
     let queryParts: string[] = [];
-    
-    //TODO : add other query values like select, limit etc directly as they are much simpler
-    for (const filter of filters) {
-      switch (filter.filterType) {
-        case QueryFilterType.Where:
-          queryParts.push(buildClause(filter));
-          break;
-        case QueryFilterType.OrderBy:
-          queryParts.push(buildClause(filter));
-          break;
-        case QueryFilterType.Limit:
-          queryParts.push(buildClause(filter));
-          break;
-        // Handle other operations like Select, Exclude, etc.
-      }
-    }
-
-    return `${baseUrl}?${queryParts.join("&")}`;
+    queryParts.push(buildClause(QueryFilterType.Limit, limit));
+    queryParts.push(buildClause(QueryFilterType.Limit, limit));
+    queryParts.push(buildSelectClause());
+    queryParts.push(buildWhereClause());
+    queryParts.push(buildExcludeClause());
+    let query = `${baseUrl}?${queryParts.join("&")}`
+    setQuery(query);
   };
 
-  const buildClause = (filter : Filter): string => {
-    if(filter.filterElements.length === 0) return "";
 
-    let whereClause = `${filter.filterType}=
-    ${filter.filterElements[0].field} ${filter.filterElements[0].operator} ${filter.filterElements[0].value} `;
+  function buildSelectClause(): string
+  {
+    return select.reduce((queryString, key, index) => {
+      const filterString = `${encodeURIComponent(key)}`;
+      
+      const prefix = index > 0 ? `,` : `${QueryFilterType.Select}=`;
+      
+      return queryString + prefix + filterString;
+    }, '');
+  }
+  function buildWhereClause(): string {
+    return where.reduce((queryString, filter, index) => {
+      const filterString = `${filter.field} ${filter.operator} ${encodeURIComponent(filter.value)}`;
+      
+      // If it's not the first filter, include the operator link (AND/OR)
+      const prefix = index > 0 ? ` ${filter.operatorLink} ` : `${QueryFilterType.Where}=`;
+      
+      return queryString + prefix + filterString;
+    }, '');
+  }
+  const buildExcludeClause = () : string => {
+    return exclude.reduce((queryString, filter, index) => {
+      const filterString = `${filter.field} ${filter.operator} ${encodeURIComponent(filter.value)}`;
+      
+      const prefix = index > 0 ? ` ${filter.operatorLink} ` : `${QueryFilterType.Exclude}=`;
+      
+      return queryString + prefix + filterString;
+    }, '');
+  }
+  const buildClause = (type : QueryFilterType, value : string | number) : string =>{
+    return `${type} = ${value}`;
+  }
 
-    if(filter.filterElements.length === 1) return whereClause;
-
-    for (let i = 1; i < filter.filterElements.length; i++) {
-      whereClause += ` ${filter.filterElements[i].operatorLink} ${filter.filterElements[i].field} ${filter.filterElements[i].operator} "${filter.filterElements[i].value}"`;
-    }
-    return whereClause;
-  };
-
-  return { addFilter, removeFilter, buildQuery };
+  return { query, addWhere, removeWhere, addExclude, removeExclude, addSelect, removeSelect, limit, setLimit, buildQuery };
 };
